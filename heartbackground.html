@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="ar">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>💚 بصمتي حب وألواني فخر 💚</title>
+  <style>
+    :root {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto,
+        "Noto Sans Arabic", "Helvetica Neue", Arial;
+    }
+    body {
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      background: #f6f7fb;
+      color: #111;
+      direction: rtl;
+    }
+    header {
+      padding: 10px 14px;
+      background: #ffffff;
+      border-bottom: 1px solid #e6e7ec;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    header h1 {
+      font-size: 16px;
+      margin: 0;
+      flex: 0 0 240px;
+    }
+    .controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .controls label {
+      font-size: 13px;
+    }
+    input[type="range"] {
+      width: 120px;
+    }
+    #canvasWrap {
+      flex: 1;
+      position: relative;
+      display: flex;
+    }
+    canvas {
+      flex: 1;
+      touch-action: none;
+      background: transparent;
+      display: block;
+    }
+    .toolbar {
+      position: absolute;
+      left: 10px;
+      top: 10px;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 8px;
+      border-radius: 10px;
+      box-shadow: 0 6px 18px rgba(20, 20, 50, 0.06);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .btn {
+      border: 0;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: #1f6feb;
+      color: white;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .btn.red {
+      background: #dc2626;
+    }
+    footer {
+      padding: 8px 12px;
+      background: #fff;
+      border-top: 1px solid #e6e7ec;
+      text-align: center;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>💚 بصمتي حب وألواني فخر 💚</h1>
+    <div class="controls">
+      <label>اللون: <input id="color" type="color" value="#e11d48"></label>
+      <label>الحجم: <input id="size" type="range" min="20" max="180" value="90"></label>
+      <label>الشفافية: <input id="alpha" type="range" min="10" max="100" value="90"></label>
+      <label><input id="randColor" type="checkbox"> لون عشوائي</label>
+    </div>
+  </header>
+
+  <div id="canvasWrap">
+    <canvas id="c"></canvas>
+    <div class="toolbar">
+      <button id="save" class="btn">💾 حفظ PNG</button>
+      <button id="clear" class="btn red">🧹 مسح البصمات</button>
+    </div>
+  </div>
+
+  <footer>
+    الخلفية مثبتة تلقائيًا — فقط ضعي بصماتك ثم احفظي.
+  </footer>
+
+  <script>
+    (function(){
+      const canvas = document.getElementById('c');
+      const ctx = canvas.getContext('2d', { alpha: true });
+      const colorInput = document.getElementById('color');
+      const sizeInput = document.getElementById('size');
+      const alphaInput = document.getElementById('alpha');
+      const randCb = document.getElementById('randColor');
+      const saveBtn = document.getElementById('save');
+      const clearBtn = document.getElementById('clear');
+
+      let bgImage = null;
+      let bgLoaded = false;
+      let stamps = [];
+
+      function fitCanvas(){
+        const rect = canvas.getBoundingClientRect();
+        const dpr = Math.max(window.devicePixelRatio || 1, 1);
+        canvas.width = Math.round(rect.width * dpr);
+        canvas.height = Math.round(rect.height * dpr);
+        canvas.style.width = rect.width + 'px';
+        canvas.style.height = rect.height + 'px';
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        redrawAll();
+      }
+
+      function initCanvas(){
+        canvas.style.width='100%';
+        canvas.style.height='100%';
+        fitCanvas();
+      }
+
+      initCanvas();
+      window.addEventListener('resize', fitCanvas);
+
+      function randomColor(){
+        const h = Math.floor(Math.random()*360);
+        const s = 65 + Math.floor(Math.random()*20);
+        const l = 45 + Math.floor(Math.random()*10);
+        return `hsl(${h} ${s}% ${l}%)`;
+      }
+
+      function drawHeart(ctxLocal, x, y, size, color, alpha, rotation=0){
+        ctxLocal.save();
+        ctxLocal.translate(x, y);
+        ctxLocal.rotate(rotation);
+        const scale = size/100;
+        ctxLocal.scale(scale, scale);
+        ctxLocal.beginPath();
+        ctxLocal.moveTo(0,30);
+        ctxLocal.bezierCurveTo(0,-20, -50,-20,-50,20);
+        ctxLocal.bezierCurveTo(-50,60,0,90,0,110);
+        ctxLocal.bezierCurveTo(0,90,50,60,50,20);
+        ctxLocal.bezierCurveTo(50,-20,0,-20,0,30);
+        ctxLocal.fillStyle = color;
+        ctxLocal.globalAlpha = alpha;
+        ctxLocal.fill();
+        ctxLocal.restore();
+      }
+
+      function addStamp(x,y,size,color,alpha,rotation){
+        stamps.push({x,y,size,color,alpha,rotation});
+        drawHeart(ctx,x,y,size,color,alpha,rotation);
+      }
+
+      function drawBackgroundToContext(ctxLocal){
+        const rect = canvas.getBoundingClientRect();
+        ctxLocal.clearRect(0,0,rect.width,rect.height);
+        if(bgLoaded && bgImage){
+          const canvasW = rect.width, canvasH = rect.height;
+          const imgW = bgImage.width, imgH = bgImage.height;
+          const scale = Math.min(canvasW/imgW, canvasH/imgH); // تعديل هنا لتناسب الصورة بالكامل
+          const dw = imgW * scale, dh = imgH * scale;
+          const dx = (canvasW - dw)/2, dy = (canvasH - dh)/2;
+          ctxLocal.drawImage(bgImage, dx, dy, dw, dh);
+        } else {
+          ctxLocal.fillStyle="#f6f7fb";
+          ctxLocal.fillRect(0,0,canvas.width,canvas.height);
+        }
+      }
+
+      function redrawAll(){
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        drawBackgroundToContext(ctx);
+        for(const s of stamps){
+          drawHeart(ctx,s.x,s.y,s.size,s.color,s.alpha,s.rotation);
+        }
+      }
+
+      // تحميل الخلفية
+      const fixedImg = new Image();
+      fixedImg.src = "بصمتي حب.. وألواني فخر.. أرسم بها وطني الغالي.png";
+      fixedImg.onload = function(){
+        bgImage = fixedImg;
+        bgLoaded = true;
+        redrawAll();
+      };
+
+      // إضافة بصمة
+      function onPointerDown(e){
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const dpr = Math.max(window.devicePixelRatio || 1, 1);
+        let clientX = e.clientX ?? (e.touches && e.touches[0].clientX);
+        let clientY = e.clientY ?? (e.touches && e.touches[0].clientY);
+        const x=(clientX-rect.left)*(canvas.width/rect.width)/dpr;
+        const y=(clientY-rect.top)*(canvas.height/rect.height)/dpr;
+        const useRandom=randCb.checked;
+        const baseColor=useRandom ? randomColor() : colorInput.value;
+        const size=parseInt(sizeInput.value,10)||90;
+        const alpha=(parseInt(alphaInput.value,10)||100)/100;
+        const rotation=(Math.random()-0.5)*0.7;
+        addStamp(x,y,size,baseColor,alpha,rotation);
+      }
+
+      canvas.addEventListener('pointerdown', onPointerDown, {passive:false});
+
+      // حفظ
+      saveBtn.addEventListener('click', ()=>{
+        const data=canvas.toDataURL('image/png');
+        const a=document.createElement('a');
+        a.href=data;
+        a.download='fingerprint-map.png';
+        a.click();
+      });
+
+      // مسح البصمات
+      clearBtn.addEventListener('click', ()=>{
+        stamps = [];
+        redrawAll();
+      });
+
+      window.addEventListener('load', initCanvas);
+    })();
+  </script>
+</body>
+</html>
